@@ -1,4 +1,4 @@
-#!/bin/ksh -x
+#!/bin/ksh 
 
 
 PDIR="/home/aconyx/Satya/HT"
