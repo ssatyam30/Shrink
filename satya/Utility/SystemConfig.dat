@@ -1,0 +1,8 @@
+## Template Path 
+export TEMPLATE=Template
+export SWAP=Swap
+export RESULT=Result
+export HEAP=Heap
+export GLOBAL_VALUE=global.dat
+export LOG=Log
+export SCAN=SCAN

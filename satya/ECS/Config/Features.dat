@@ -1,0 +1,14 @@
+######################################################
+########### Feature list for test execution ##########
+######################################################
+
+### to enable/disable features, update 0 or 1. Enable=1, Disable=0 ###
+
+###### Provisioning #####
+#Provisioning=1
+#clean_Provisioning=1
+
+
+##### ODR Scenarios ####
+BASIC_ECS=1
+CALL_BACK=0

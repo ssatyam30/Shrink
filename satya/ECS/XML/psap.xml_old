@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+
+<scenario name="Basic UAS">
+
+  
+
+<recv request="INVITE" crlf="true" >
+ <action>
+	<ereg regexp="(.*)(<)(.*)(@.*)" search_in="hdr" header="From:" check_it="true" assign_to="dummy,dummy,dummy,vCaller,dummy" />
+	<ereg regexp=".*" search_in="hdr" header="To:" check_it="true" assign_to="vTo" />
+	<ereg regexp=".*" search_in="hdr" header="From:" check_it="true" assign_to="vFrom" />
+     <ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+     <ereg regexp=".*" search_in="hdr" header="Via:" check_it="true" assign_to="vVia" />
+     <ereg regexp="Satya_PSAP1_(.*)_PSAP2_" search_in="hdr" header="User-Agent:" check_it="true" assign_to="dummy,vPSAP1" />
+<exec command="echo INCOMING:B,ACTION:START,TESTCASEID:[$vTestCaseID],CALLID:[call_id] >> ECS/SIPP_XML_Status.txt" />
+
+      </action>
+   </recv>
+
+<nop>
+	<action>
+	 <assignstr assign_to="vF" value="[$vPSAP1]" />
+		<strcmp assign_to="result" variable="vF" value="" />
+		<test assign_to="vFL" variable="result" compare="equal" value="0" />
+		<ereg regexp="([A-Z0-9]{1,9})-(.*)"  search_in="var" check_it="true" assign_to="dummy,vMsg,vFlowSeq" variable="vF" />
+	</action>
+</nop>	
+
+<nop test="vFL" next="noError" >
+ <action>
+	 <log message="Flow message now - [$vF] and [$vFL], flow-[$vPSAP1], current Msg- [$vMsg] and remaining- [$vFlowSeq] "/>
+ </action>
+</nop>
+
+<!-- handing error scenarios : START -->
+
+<label id="flow"/>
+<nop>
+	<action>
+		<strcmp assign_to="result" variable="vMsg" value="S480" />
+		<test assign_to="vSend480" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="S486" />
+		<test assign_to="vSend486" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="S100" />
+		<test assign_to="vSend100" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="S603" />
+		<test assign_to="vSend603" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="RI" />
+		<test assign_to="vReceiveINVITE" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="RACK" />
+		<test assign_to="vReceiveACK" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="CONNECT" />
+		<test assign_to="vConnect" variable="result" compare="equal" value="0" />
+
+	</action>
+</nop>
+
+<nop next="receiveINVITE" test="vReceiveINVITE"> <action> <log message="checking if recceive INVITE is the next transaction "/> </action> </nop>
+<nop next="receiveACK" test="vReceiveACK"> <action> <log message="checking if recceive ACK is the next transaction "/> </action> </nop>
+<nop next="send480" test="vSend480"> <action> <log message="checking if send 480 is the next transaction "/> </action> </nop>
+<nop next="send486" test="vSend486"> <action> <log message="checking if send 486 is the next transaction "/> </action> </nop>
+
+<nop next="send100" test="vSend100"> <action> <log message="checking if send 100 is the next transaction "/> </action> </nop>
+<nop next="send603" test="vSend603"> <action> <log message="checking if send 603 is the next transaction "/> </action> </nop>
+<nop next="noError" test="vConnect"> <action> <log message="checking if CONNECT is the next transaction "/> </action> </nop>
+
+<label id="receiveINVITE"/>
+<nop><action><log message="waiting for INVITE "/></action></nop>
+<recv request="INVITE" next="4">
+ <action>
+	<ereg regexp="(.*)(<)(.*)(@.*)" search_in="hdr" header="From:" check_it="true" assign_to="dummy,dummy,dummy,vCaller,dummy" />
+	<ereg regexp=".*" search_in="hdr" header="To:" check_it="true" assign_to="vTo" />
+	<ereg regexp=".*" search_in="hdr" header="From:" check_it="true" assign_to="vFrom" />
+     <ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+     <ereg regexp=".*" search_in="hdr" header="Via:" check_it="true" assign_to="vVia" />
+      </action>
+   </recv>
+
+<label id="receiveACK"/>
+<nop><action><log message="waiting for ACK"/></action></nop>
+<recv request="ACK" next="4"/>
+<label id="send480"/>
+<nop><action><log message="sending 480 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 480 Temporary Unavailable
+[last_Via:]
+[last_From:]
+[last_To:];tag=1
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="send486"/>
+<nop><action><log message="sending 486 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 486 BUSY HERE
+[last_Via:]
+[last_From:]
+[last_To:];tag=1
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="send100"/>
+<nop><action><log message="sending 100 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 100 Trying
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="send603"/>
+<nop><action><log message="sending 603 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 603 Decline
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+
+<label id="4"/>
+<nop>
+	<action>
+<log message="*******checking for remaining transaction****** "/>
+		<strcmp assign_to="result" variable="vFlowSeq" value="" />
+		<test assign_to="vF" variable="result" compare="not_equal" value="0" />
+		<test assign_to="vE" variable="result" compare="equal" value="0" />
+		<ereg regexp="([A-Z0-9]{1,9})-(.*)"  search_in="var" check_it="true" assign_to="dummy,vMsg,vFlowSeq" variable="vFlowSeq" />
+	</action>
+</nop>	
+<nop next="flow" test="vF"><action><log message="now checking remaining flow vF - message [$vMsg]  and remaining:[$vFlowSeq]"/></action></nop>
+<nop next="endCall" test="vE"> <action><log message="Going to end call"/></action></nop>
+
+
+<!-- handing error scenarios : END -->
+
+<label id="noError"/>
+
+<send>
+    <![CDATA[
+
+      SIP/2.0 100 Trying
+      [last_Via:]
+      [last_From:]
+      [last_To:];tag=[call_number]
+      [last_Call-ID:]
+      [last_CSeq:]
+      Contact: <sip:[local_ip]:[local_port];transport=[transport]>
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+<send>
+    <![CDATA[
+
+      SIP/2.0 180 Session Progress
+      [last_Via:]
+      [last_From:]
+      [last_To:];tag=[call_number]
+      [last_Call-ID:]
+      [last_CSeq:]
+      Require: 100rel
+      RSeq: 1
+      Contact: <sip:[local_ip]:[local_port];transport=[transport]>
+      Content-Type: application/sdp
+      Content-Length: 0
+
+    ]]>
+  </send>
+<recv request="PRACK"/>
+ <send >
+    <![CDATA[
+
+      SIP/2.0 200 OK
+      [last_Via:]
+      [last_From:]
+      [last_To:]
+      [last_Call-ID:]
+      [last_CSeq:]      
+      Contact: <sip:[local_ip]:[local_port];transport=[transport]>
+      Content-Length: 0
+
+    ]]>
+
+ </send>
+
+<pause milliseconds="3000" />
+
+<send retrans="1000">
+    <![CDATA[
+
+      SIP/2.0 200 OK
+      Via:[$vVia] 
+      [last_From:]
+      [last_To:]
+      [last_Call-ID:]
+      CSeq: [$vCseq]
+      Contact: <sip:[local_ip]:[local_port];transport=[transport]>
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+v=0
+o=BroadWorks 246972 1 IN IP4 10.255.224.10
+s=-
+c=IN IP4 10.255.224.10
+t=0 0
+m=audio 24374 RTP/AVP 18 101
+a=silenceSupp:off - - - -
+a=rtpmap:18 G729/8000
+a=fmtp:18 annexb=no
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+
+    ]]>
+  </send>
+
+<recv request="ACK" />
+
+<label id="waitForBYE"/>
+<recv request="BYE" next="receivedBYE" ontimeout="NoCallBack" timeout="15000" />
+<label id="receivedBYE"/>
+   <send >
+    <![CDATA[
+
+      SIP/2.0 200 OK
+      [last_Via:]
+      [last_From:]
+      [last_To:]
+      [last_Call-ID:]
+      [last_CSeq:]
+      Content-Length: 0
+
+      ]]>
+  </send>
+
+<pause milliseconds="5000" />
+<send>
+    <![CDATA[
+
+      INVITE [$vCaller]@[remote_ip] SIP/2.0
+	Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+	From:[$vTo];tag=[call_number]
+To:[$vFrom]      
+      [last_Call-ID:]
+      CSeq: 2 INVITE
+      Min-SE: 90
+      Session-Expires: 180;refresher=uac
+      Contact: <sip:9711333717@[local_ip]:[local_port]>
+      Max-Forwards: 70
+      Content-Type: application/sdp
+      User-Agent: VCS  5.9.2.42-01
+      Content-Length: [len]
+
+v=0
+o=BroadWorks 246986 1 IN IP4 10.255.224.2
+s=-
+c=IN IP4 0.0.0.0
+t=0 0
+m=audio 23926 RTP/AVP 0 101
+a=rtpmap:0 PCMU/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=ptime:20
+a=sendonly
+
+]]>
+ </send>
+
+<recv response="100" optional="true"/> 
+<recv response="200"/>
+
+<send next="waitForBYE">
+<![CDATA[
+
+ACK [$vCaller]@[remote_ip] SIP/2.0
+        Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+        From:[$vTo];tag=[call_number]
+To:[$vFrom]
+      [last_Call-ID:]
+CSeq: 2 ACK
+Max-Forwards: 70
+Content-Length: 0
+
+]]>
+ </send>
+
+<label id="NoCallBack"/>
+
+  <send >
+    <![CDATA[
+
+      BYE [$vCaller]@[remote_ip] SIP/2.0
+        Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+        From:[$vTo];tag=[call_number]
+To:[$vFrom]
+      [last_Call-ID:]
+      CSeq: [cseq] BYE
+      Min-SE: 90
+      Max-Forwards: 70
+      Content-Length: 0
+
+    ]]>
+  </send>
+<recv response="200" />
+
+<label id="endCall"/>
+<nop> <action> <exec command="echo INCOMING:B,ACTION:FINISHED,TESTCASEID:[$vTestCaseID],CALLID:[call_id]>> ECS/SIPP_XML_Status.txt" /> </action> </nop>	
+
+  <ResponseTimeRepartition value="10, 20, 30, 40, 50, 100, 150, 200"/>
+
+  <!-- definition of the call length repartition table (unit is ms)     -->
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+
+</scenario>
+
+
+

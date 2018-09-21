@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+
+
+<scenario name="Orig Party">
+<nop>
+        <action>
+         <assignstr assign_to="vTestCaseID" value="[field0]" /> 
+         <assignstr assign_to="vCaller_name" value="[field1]" />
+         <assignstr assign_to="vCaller_no" value="[field2]" />
+         <assignstr assign_to="vCallee" value="[field3]" />
+         <assignstr assign_to="vOtg" value="[field4]" />
+         <assignstr assign_to="vSend_PAI" value="[field5]" />
+         <assignstr assign_to="vPAI_Caller_no" value="[field6]" />
+         <assignstr assign_to="vPAI_Caller_name" value="[field7]" />
+         <assignstr assign_to="vPAI_tel_Caller_no" value="[field8]" />
+          <assignstr assign_to="vPRIV" value="[field9]" />
+         <assignstr assign_to="vPRIO" value="[field10]" />
+<exec command="echo TESTCASEID:[$vTestCaseID],CALLID:[call_id]  >> ECS/SIPP_XML_Result.txt" />
+ <exec command="echo OUTGOING:A,ACTION:START,TESTCASEID:[$vTestCaseID],CALLID:[call_id] >> ECS/SIPP_XML_Status.txt" /> 
+<strcmp assign_to="result" variable="vSend_PAI" value="1" />
+        <test assign_to="vPAI" variable="result" compare="equal" value="0" />        
+</action>
+</nop>
+<nop next="1" test="vPAI">
+ <action>
+         <log message="send PAI = [$vPAI] "/>
+ </action>
+</nop>
+
+  <send retrans="1500" next="2">
+    <![CDATA[
+
+ INVITE sip:[$vCallee]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
+      From: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port];pstn-params=9082828088:[$vOtg];cpc=ordinary>;tag=[call_number]
+      To: <sip:[$vCallee]@[remote_ip]:[remote_port]>
+      Call-ID: [$vTestCaseID]///[call_id]
+      CSeq: 1 INVITE
+      Content-Length: 337
+      Contact: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port]>
+      User-Agent1: CSCO/4
+      User-Agent: [$vCaller_name] GXP1625 1.0.2.27
+      Max-Forwards: 70
+      Supported: replaces, path, timer, 100rel
+      Allow: INVITE, ACK, OPTIONS, CANCEL, BYE, SUBSCRIBE, NOTIFY, INFO, REFER, UPDATE, MESSAGE, PRACK
+      Content-Type: application/sdp
+      [$vPRIV]
+      [$vPRIO]
+       Accept: application/sdp, application/dtmf-relay
+
+v=0
+o=[$vCaller_no] 8000 8000 IN IP4 [local_ip]
+s=SIP Call
+c=IN IP4 [local_ip]
+t=0 0
+m=audio 5004 RTP/AVP 0 8 18 9 2 101
+a=sendrecv
+a=rtpmap:0 PCMU/8000
+a=ptime:20
+a=rtpmap:8 PCMA/8000
+a=rtpmap:18 G729/8000
+a=fmtp:18 annexb=no
+a=rtpmap:9 G722/8000
+a=rtpmap:2 G726-32/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+
+    ]]>
+  </send>
+
+<label id="1"/>
+
+<send retrans="1500" >
+ <![CDATA[
+
+ INVITE sip:[$vCallee]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
+      From: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port];pstn-params=9082828088:[$vOtg];cpc=ordinary>;tag=[call_number]
+      To: <sip:[$vCallee]@[remote_ip]:[remote_port]>
+      Call-ID: [$vTestCaseID]///[call_id]
+      CSeq: 1 INVITE
+      Content-Length: 337
+      Contact: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port]>
+      User-Agent1: CSCO/4
+      User-Agent: [$vCaller_name] GXP1625 1.0.2.27
+      P-Asserted-Identity: "[$vPAI_Caller_name]" <sip:[$vPAI_Caller_no]@[remote_ip]:[remote_port]>, "[$vPAI_Caller_name]" <tel:[$vPAI_tel_Caller_no];cpc=ordinary>
+      Max-Forwards: 70
+      Supported: replaces, path, timer, 100rel
+      Allow: INVITE, ACK, OPTIONS, CANCEL, BYE, SUBSCRIBE, NOTIFY, INFO, REFER, UPDATE, MESSAGE, PRACK
+      Content-Type: application/sdp
+      [$vPRIV]
+      [$vPRIO]
+       Accept: application/sdp, application/dtmf-relay
+
+v=0
+o=[$vCaller_no] 8000 8000 IN IP4 [local_ip]
+s=SIP Call
+c=IN IP4 [local_ip]
+t=0 0
+m=audio 5004 RTP/AVP 0 8 18 9 2 101
+a=sendrecv
+a=rtpmap:0 PCMU/8000
+a=ptime:20
+a=rtpmap:8 PCMA/8000
+a=rtpmap:18 G729/8000
+a=fmtp:18 annexb=no
+a=rtpmap:9 G722/8000
+a=rtpmap:2 G726-32/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+
+    ]]>
+  </send>
+<label id="2"/>
+
+ <recv response="100" optional="true"></recv> 
+ <recv response="183" optional="true"></recv> 
+<recv response="180"/>
+ 
+<send>
+    <![CDATA[
+
+      PRACK sip:[$vCallee]@[remote_ip]:[remote_port];transport=UDP SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
+      To: <sip:[$vCallee]@[remote_ip]:[remote_port]>[peer_tag_param]
+      From: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port]>;tag=[call_number]
+      Call-ID: [$vTestCaseID]///[call_id]
+      Contact: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port]>
+      CSeq: 2 PRACK
+      Max-Forwards: 70
+      RAck: 1 1 INVITE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+<recv response="200"/> 
+
+<recv response="200"/>
+
+<send>
+<![CDATA[
+
+  ACK sip:[$vCallee]@[remote_ip]:[remote_port];transport=udp SIP/2.0	
+  Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
+  To: <sip:[$vCallee]@[remote_ip]:[remote_port]>
+  From: "[$vCaller_name]" <sip:[$vCaller_no]@[local_ip]:[local_port]>;tag=[call_number]
+  Call-ID: [$vTestCaseID]///[call_id]
+  CSeq: 1 ACK
+  Contact: <sip:[$vCaller_no]@[local_ip]:[local_port]>
+  Max-Forwards: 70
+  Supported: replaces, path, timer, 100rel
+  User-Agent: [$vCaller_name] GXP1625 1.0.2.27
+  Allow: INVITE, ACK, OPTIONS, CANCEL, BYE, SUBSCRIBE, NOTIFY, INFO, REFER, UPDATE, MESSAGE
+
+    ]]>
+  </send>
+
+<recv request="BYE"></recv>
+
+<send>
+
+<![CDATA[
+    SIP/2.0 200 OK
+      [last_Via:]
+     [last_From:]
+     [last_To:];tag=[call_number]
+     [last_Call-ID:]
+     [last_CSeq:]
+     Content-Length: 207
+     Contact: <sip:[$vCaller_no]@[local_ip]:[local_port]>
+    
+]]>
+
+</send>
+<nop> 
+<action> 
+<exec command="echo OUTGOING:A,ACTION:FINISHED,TESTCASEID:[$vTestCaseID],CALLID:[call_id]>> ECS/SIPP_XML_Status.txt" /> 
+</action> 
+</nop>
+</scenario>

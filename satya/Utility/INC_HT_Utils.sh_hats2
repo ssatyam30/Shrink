@@ -1,0 +1,259 @@
+#!/bin/ksh -x
+
+#############################################
+export session_idFile="$PDIR/INC/session_id.ingw"
+export dialogIDFile="$PDIR/INC/dialogIDFile"
+
+
+export inc_sess_id=`head -1 $session_idFile`
+export hex_file=""
+
+num_hex(){
+	hex=""
+	num=$1
+	code=""
+
+	case $4 in
+		CALLER)
+			logger "CALLER code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 83 07 03 13 
+			odd_even="03 13"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 13"
+			fi
+			orig_length=`expr $((${#num}/2)) + 2`
+			o_length=`printf "%x" $orig_length` 
+
+			if [ $((${#o_length}%2)) -eq 1 ];
+			then
+				o_length="0$o_length"
+			fi
+			code="92 $o_length $odd_even "
+			;;
+		CALLEE)
+			logger "CALLEE code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 0x82 0x0b (size of dest-11) 0x83 (odd size) or 0x82 0x07 (size of dst- 7) 0x03 (even size)
+
+			odd_even="00 50"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="80 50"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="96 $d_length $odd_even "
+			;;
+		CHARGE_NO)
+			logger "CHARGE NUMBER code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 0x82 0x0b (size of dest-11) 0x83 (odd size) or 0x82 0x07 (size of dst- 7) 0x03 (even size)
+
+			odd_even="03 10"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 10"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="93 $d_length $odd_even "
+			;;
+		TCR)
+			logger "TCR code:"
+#			code= tag length 9f_34 01 03
+			code="9f 34 01 "
+			;;
+		DATA_LENGTH)
+			logger "DATA_LENGTH code:"
+#			code= total tag data_length 
+			code="`printf "%x" $total_data_length` 30 "
+			num=$data_length
+
+			;;
+		*)
+			logger "$4 code: "
+			code=""
+			;;
+	  esac
+
+	
+	if [ "x$2" == "x1" ]
+	then
+		num=`printf "%x" $num`
+	fi
+	j="1"
+	if [ $((${#num}%2)) -eq 1 ];
+	then
+		num="0$num"
+	fi
+
+	for (( i=0; i<${#num}; i++ )) 
+	do   
+		a="${num:$i:1}"
+		i=`expr $i + $j`
+		b="${num:$i:1}"
+		if [ "x$b" == "x" ]
+		then
+			b=0
+		fi
+		if [ "x$3" == "x1" ]
+		then
+			hex="$hex$b$a "
+		else hex="$hex$a$b "
+		fi
+	done
+	i=`expr ${#hex} - 1`
+	hex="${hex:0:$i}"
+#	return $hex
+	logger "$num and $hex for $4"
+	sed s/$4/"$code$hex"/g $PDIR/$serviceName/$SWAP/$dialog_ID.hex > tmp
+	cat tmp > $PDIR/$serviceName/$SWAP/$dialog_ID.hex 
+}
+
+createBufferToSend(){
+	
+
+#	tc_id=`echo $1 | cut -d ";" -f2` 
+#test_case_id;calling_party_id;collected_add_info;triggering_crieria;charge_no;
+#hats2-1;8088870001;0805762600;03;8088870001;
+
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "CALLER"
+	num_hex `echo $1 | cut -d ";" -f3` 0 1 "CALLEE"
+	num_hex `echo $1 | cut -d ";" -f4` 0 0 "TCR"
+	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CHARGE_NO"
+	
+#	num_hex $sk 1 0 "SERVICE_KEY"
+#	num_hex $opc 1 0 "ORIG_POINT_CODE"
+#	num_hex $tpc 1 0 "TERM_POINT_CODE"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+
+#	DATA_LENGTH
+	logger "DATA_LENGTH code: total_data_length=$data_length + $orig_length + $dest_length + 1"
+	data_length=`expr $data_length + $orig_length + $dest_length`
+	total_data_length=`expr $data_length + "2"`
+	num_hex $total_data_length 1 0 "DATA_LENGTH"
+        buffer_len=`expr 14 + $total_data_length`
+        num_hex $buffer_len 1 0 "BUFFER_SIZE"
+
+##	create buffer and get the size of hex buffer
+	$PDIR/INC/hex_to_buff.sh $PDIR/$serviceName/$SWAP/$dialog_ID.hex $PDIR/$serviceName/$SWAP/$dialog_ID.buffer
+	tl=`hexdump -v -e '1/1 "\n"' $PDIR/$serviceName/$SWAP/$dialog_ID.buffer |wc -l`	
+
+
+### create CSV file for LNP scenarios
+	echo "$testcase_id;$dialog_ID;$tl;$cas_fip\$$inc_sess_id;$1;" >> $tc_csv
+#	mv $dialog_ID.hex logs/
+
+
+}
+
+createHex(){
+
+	LINE=$1
+	testcase_id=`echo $LINE| cut -d ";" -f1`
+	caller=`echo $LINE| cut -d ";" -f2`
+	callee=`echo $LINE| cut -d ";" -f3`
+
+	> $PDIR/$serviceName/$SWAP/$dialog_ID.buffer
+	cat $hex_file > $PDIR/$serviceName/$SWAP/$dialog_ID.hex
+	createBufferToSend $LINE
+
+}
+
+getDialogID(){
+
+	if [ ! -e "$dialogIDFile" ]
+         then
+ 	 	logger "this is first message, creating dialogIDFile"
+		dialog_ID=$FIRST_DIAG_ID
+	else 
+		logger "this is not first message of INC"
+		dialog_ID=`tail -1 $dialogIDFile`
+		if [ "dialog_ID" -gt "1200000" ] 
+		then
+			dialog_ID="1100001"
+		fi
+		dialog_ID=$((dialog_ID+1))
+				
+
+	fi
+	 echo $dialog_ID > $dialogIDFile
+
+
+}
+getDefaultBufferLength(){
+
+	case $serviceName in
+		HT)
+			logger "default buffer size for $serviceName = $DEFAULT_BUFFER_SIZE_HT "
+			data_length="$DEFAULT_BUFFER_SIZE_HT"
+			;;
+		*)
+			logger "default buffer size for $serviceName = 29"
+			data_length="29"
+			;;
+	  esac
+
+}
+
+#export FIRST_DIAG_ID=1100001
+#### define LNP properties here ###
+#export SERVICE_KEY=70
+#export OPC=624
+#export DPC=720
+#export HEX_FILE="lnp.hex"
+#export DEFAULT_BUFFER_SIZE_LNP="29"
+
+
+### below data length is for Service ###
+export data_length=""
+export orig_length=""
+export dest_length=""
+export dialog_ID=""
+export sk=""
+export opc=""
+export dpc=""
+export cas_fip=""
+export testcase_id=""
+
+createBufferFiles(){
+
+
+	getDialogID
+	#dialog_ID=`grep first_diag_id $propertyFile | cut -d "=" -f2`
+	export tc_csv=$incDataFile
+	hex_file="$PDIR/INC/$HEX_FILE"
+	sk=$SERVICE_KEY
+	opc=$OPC
+	tpc=$DPC
+	cas_fip=`echo $CAS_ip | cut -d "=" -f2 | cut -d "." -f4`
+	echo "SEQUENTIAL;" > $tc_csv
+
+
+	egrep -v "^#|^[ ]*$" $INC_HT_TC_File | while read -r line
+	do
+	#	echo $line
+
+		getDefaultBufferLength
+		createHex $line
+		export orig_length=""
+		export dest_length=""
+		dialog_ID=`expr 1 + $dialog_ID`
+	#break
+	done
+
+}

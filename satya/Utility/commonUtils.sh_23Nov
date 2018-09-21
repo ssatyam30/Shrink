@@ -1,0 +1,362 @@
+#!/bin/ksh
+
+#Parent Directory
+#PDIR=`dirname $(dirname "$(readlink -f $0)")`
+
+## execute propertyFile
+. $PDIR/Utility/SystemConfig.dat
+
+export dateFolder=""
+
+## Logger
+logger()
+{
+        if [ $DEBUG -eq 1 ]
+        then
+           echo `date '+%Y-%m-%d-%H:%M:%S'`" [$$] - $1" >> $PDIR/$serviceName/$LOG/$LOG_FILE
+        fi
+}
+
+# check for profiles availability in home directory.
+validateFileExists()
+{
+        if [ -e "$1" ]
+        then
+                return 1
+        else
+                return 0
+        fi
+}
+
+
+main(){
+	export START_TIME=`date +%Y%m%d-%H:%M:%S`
+	export START_SECONDS=$SECONDS
+	\rm REPORTS/*.html
+	 
+	for SERVICE in $SERVICE_LIST
+	do
+
+		\cp Config/$CUSTOMER.properties $SERVICE/Config/
+		echo "getPorts $SERVICE" >> $SERVICE/Config/$CUSTOMER.properties
+		echo "SERVICE: $SERVICE and CUSTOMER:$CUSTOMER "
+
+		echo "#!/bin/ksh
+export PDIR=`pwd`
+. $PDIR/Utility/commonUtils.sh
+export serviceName=$SERVICE
+export customerName=$CUSTOMER " >runFeatures.$SERVICE.$CUSTOMER.sh
+		> $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html
+		> $PDIR/$SERVICE/$SERVICE.$CUSTOMER.log
+
+		for var2 in `egrep -v "^#|^[ ]*$" $PDIR/$SERVICE/Config/Features.dat | grep "=1"`
+		do
+
+				feature=`echo $var2 |cut -d "=" -f1`
+				echo "./$SERVICE/TestSuite/$feature.sh $CUSTOMER.properties" >> runFeatures.$SERVICE.$CUSTOMER.sh
+		done
+
+		echo "cat $PDIR/Utility/htmlTemplate.sat >> $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html
+export END_TIME=\`date +%Y%m%d-%H:%M:%S\`
+export END_SECONDS=\$SECONDS
+ELAPSED_TIME=\$((END_SECONDS-START_SECONDS))
+Time_taken=\$(convertsecs \$ELAPSED_TIME)
+Duration=\`printf \"Total Seconds: %.0f seconds \" \$ELAPSED_TIME \`
+sed \"s/START_TIME/$START_TIME/g\"  $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html > tmp
+sed \"s/END_TIME/\$END_TIME/g\"  tmp > tmp2
+sed \"s/DURATION/\$Time_taken/g\"  tmp2 > tmp
+sed \"s/TOTAL_SECONDS/\$Duration/g\"  tmp > $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html
+rm -rf tmp tmp2
+cp $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html $PDIR/REPORTS/
+mv $PDIR/$SERVICE/$SERVICE.$CUSTOMER.html $PDIR/$SERVICE/$SERVICE.$CUSTOMER.`date +%Y%m%d-%H%M%S`.html" >> runFeatures.$SERVICE.$CUSTOMER.sh
+
+		chmod 777 runFeatures.$SERVICE.$CUSTOMER.sh
+		./runFeatures.$SERVICE.$CUSTOMER.sh 
+
+
+	done
+
+}
+
+getPorts(){
+	
+	export Local_Port=$((Local_Port_$1))
+	export CRE_PORT=$((Local_Port+20))
+	export CRE_PORT1=$((Local_Port+22))
+	export T1_Port=$((Local_Port+40))
+	export T2_Port=$((Local_Port+50))
+	export T3_Port=$((Local_Port+60))
+	export T4_Port=$((Local_Port+70))
+if [ "$1" == "MPH" ] && [ "$CUSTOMER" == "Level3" ] 
+	then
+		export T1_Port=5072
+		export T2_Port=5074
+		export T3_Port=5073
+		export T4_Port=5075
+	fi
+
+	echo "Ports are: $Local_Port $CRE_PORT $CRE_PORT1 $T1_Port $T2_Port $T3_Port $T4_Port"
+}
+
+moveAPILogs(){
+
+	dirName=$1_`date +%Y%m%d%H%M%S`
+	mkdir $PDIR/$serviceName/$LOG/$dirName
+	rm -rf $PDIR/$serviceName/$SWAP/tmp*
+	cp -r  $PDIR/$serviceName/$SWAP $PDIR/$serviceName/$LOG/$dirName/
+	cp -r  $PDIR/$serviceName/$HEAP $PDIR/$serviceName/$LOG/$dirName/
+	cp -r  $PDIR/$serviceName/$RESULT $PDIR/$serviceName/$LOG/$dirName/
+	cp  $PDIR/$serviceName/$LOG/$LOG_FILE* $PDIR/$serviceName/$LOG/$dirName/
+}
+
+moveSIPPLogs()
+{
+
+	dirName=$1_`date +%Y%m%d%H%M%S`
+	mkdir $PDIR/$serviceName/Log/$dirName
+	mkdir $PDIR/$serviceName/Result/$dirName
+	
+#	echo "########### START: $1 results ###########" >> $PDIR/$serviceName/$serviceName.$customerName.log
+#        cat $PDIR/AUTORUN_Result.txt >> $PDIR/$serviceName/$serviceName.$customerName.log 
+#	echo "########### FINISH: $1 results ###########" >> $PDIR/$serviceName/$serviceName.$customerName.log
+#	echo "" >> $PDIR/$serviceName/$serviceName.$customerName.log
+
+	mv $PDIR/$serviceName/SIPP_XML_Result.txt $PDIR/$serviceName/Result/$dirName/SIPP_XML_Result.$1.txt
+	mv $PDIR/$serviceName/SIPP_XML_Status.txt $PDIR/$serviceName/Result/$dirName/SIPP_XML_Status.$1.txt
+#	mv $PDIR/AUTORUN_Result.txt $PDIR/Result/Result_$1.txt
+#	mv $PDIR/detailCDR.$customerName.$1.txt $PDIR/$1_CDR_Result.txt
+
+	mv $PDIR/$serviceName/XML/*.log $PDIR/$serviceName/Log/$dirName/
+	mv $PDIR/AutomationCallsCDR $PDIR/$serviceName/Log/$dirName/
+	mv $PDIR/$serviceName/$1.pcap $PDIR/$serviceName/Log/$dirName/
+#	mv $PDIR/$1_*.txt $PDIR/$serviceName/Result/
+	mv $PDIR/$serviceName/$LOG/*.rexec $PDIR/$serviceName/Log/$dirName/
+
+	mv $PDIR/$serviceName/detailCDR.$customerName.$1.log $PDIR/$serviceName/Result/$dirName/
+	cp -rf $PDIR/$serviceName/$serviceName.$CUSTOMER.html $PDIR/$serviceName/Result/$dirName/
+
+
+}
+
+cleanCASLogs()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+
+	getDate
+	logger "clean Cas logs: directory dateFolder name is $dateFolder"
+
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/CAS.log.* 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/sipDebug.log.* 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  ">$CAS_Logs$dateFolder/CAS.log" 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  ">$CAS_Logs$dateFolder/sipDebug.log "
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/CAS.log.*
+
+	logger "./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/CAS.log.* "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/sipDebug.log.* "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  >$CAS_Logs$dateFolder/CAS.log "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  >$CAS_Logs$dateFolder/sipDebug.log "
+
+
+}
+
+cleanSASLogs()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+
+	getDate
+	logger "clean Cas logs: directory dateFolder name is $dateFolder"
+
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/SAS.log.* 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/sipDebug.log.* 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  ">$CAS_Logs$dateFolder/SAS.log" 
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  ">$CAS_Logs$dateFolder/sipDebug.log "
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/SAS.log.*
+
+	logger "./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/SAS.log.* "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  rm -rf $CAS_Logs$dateFolder/sipDebug.log.* "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  >$CAS_Logs$dateFolder/SAS.log "
+	logger "	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  >$CAS_Logs$dateFolder/sipDebug.log "
+
+
+}
+
+
+startTCPDump()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+	filename=$PDIR/$serviceName/$1.pcap
+	logger "$filename"
+	tcpdump -i any -w $filename &
+
+}
+
+saveCASLogs()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+	getDate
+	logCasFolder="$1.`date +%Y%m%d%H%M%S"
+	logger "save CAS logs: directory dateFolder name is $dateFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "rm -rf $CAS_Logs$dateFolder/$logCasFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "mkdir $CAS_Logs$dateFolder/$logCasFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "cp $CAS_Logs$dateFolder/CAS.* $CAS_Logs$dateFolder/$logCasFolder/"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "cp $CAS_Logs$dateFolder/sipDebug.* $CAS_Logs$dateFolder/$logCasFolder/ "
+
+}
+
+saveSASLogs()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+	getDate
+	logCasFolder="$1.`date +%Y%m%d%H%M%S"
+	logger "save CAS logs: directory dateFolder name is $dateFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "rm -rf $CAS_Logs$dateFolder/$logCasFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "mkdir $CAS_Logs$dateFolder/$logCasFolder"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "cp $CAS_Logs$dateFolder/SAS.* $CAS_Logs$dateFolder/$logCasFolder/"
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  "cp $CAS_Logs$dateFolder/sipDebug.* $CAS_Logs$dateFolder/$logCasFolder/ "
+
+}
+
+
+saveTCPDump()
+{
+	if [ $saveLOGS -eq 0 ]
+	then
+		return 0
+	fi
+
+#	process=`ps -a | grep tcpdump`
+	process=`ps -a | grep $1.pcap`
+	logger "$process"
+	a=`expr "$process" : '\(.*\) pts.*'`
+#	kill -9 $a
+
+}
+
+checkCDR()
+{
+	
+	if [ $verifyCDR -eq 0 ]
+	then
+		./Utility/compResult.sh OFF SIPP_XML_Result.txt $1
+		return 0
+	fi
+
+	getDate
+	logger "Check CDR: directory dateFolder name is $dateFolder"
+
+	if [ $CDRDate -eq 0 ]
+	then
+		dateFolder=""
+	fi
+	./Utility/TestRexec -host $CAS_ip -userId $CAS_user -passwd $CAS_pass -cmd  grep $Local_Host $CDRPath$dateFolder/* > AutomationCallsCDR
+	./Utility/compResult.sh AutomationCallsCDR SIPP_XML_Result.txt $1 
+
+}
+
+getDate()
+{
+	dm=`date +"%m_%d_"`
+	year=`date +"%Y"`
+	dateFolder=$dm$year
+	
+}
+
+createCREInput()
+{
+
+	touch $PDIR/$serviceName/Data/$1
+
+}
+
+createProvDataFile()
+{
+	sed s/Local_Host/$Local_Host/g $PDIR/$serviceName/$SWAP/Template_$1 > $PDIR/$serviceName/$SWAP/tmp_d
+	sed s/T1_Port/$T1_Port/g $PDIR/$serviceName/$SWAP/tmp_d > $PDIR/$serviceName/$SWAP/tmp_d1
+	sed s/T2_Port/$T2_Port/g $PDIR/$serviceName/$SWAP/tmp_d1 > $PDIR/$serviceName/$SWAP/tmp_d
+	sed s/T3_Port/$T3_Port/g $PDIR/$serviceName/$SWAP/tmp_d > $PDIR/$serviceName/$SWAP/tmp_d1
+	sed s/CRE_T/$CRE_T/g $PDIR/$serviceName/$SWAP/tmp_d1 > $PDIR/$serviceName/$SWAP/tmp_d
+	sed s/CRE_FLAG/$CRE_FLAG/g $PDIR/$serviceName/$SWAP/tmp_d > $PDIR/$serviceName/$SWAP/tmp_d1
+
+	sed s/CCNN_CC/$CCNN_CC/g $PDIR/$serviceName/$SWAP/tmp_d1 > $PDIR/$serviceName/$SWAP/tmp_d
+	mv -f $PDIR/$serviceName/$SWAP/tmp_d $PDIR/$serviceName/$SWAP/$1
+
+}
+createSIPPDataFile()
+{
+
+	logger "READ_CALLED_NUM_FROM_RURI = $READ_CALLED_NUM_FROM_RURI"	
+	if [ "$READ_CALLED_NUM_FROM_RURI" == 0 ]
+	then
+		toField=$CCNN_CC
+	else toField=$READ_CALLED_NUM_FROM_RURI
+	fi
+	
+	sed s/CCNN_CC/$CCNN_CC/g $PDIR/$serviceName/Data/$2/$1 > $PDIR/$serviceName/$SWAP/tmp_sipp
+	sed s/READ_CALLED_NUM_FROM_RURI/$toField/g $PDIR/$serviceName/$SWAP/tmp_sipp > $PDIR/$serviceName/$SWAP/tmp_sipp2
+	sed s/TF_NO/$idTF/g $PDIR/$serviceName/$SWAP/tmp_sipp2 > $PDIR/$serviceName/$SWAP/tmp_sipp
+	sed s/PLUSCHAR/+/g $PDIR/$serviceName/$SWAP/tmp_sipp > $PDIR/$serviceName/$SWAP/$1
+	logger "READ_CALLED_NUM_FROM_RURI = $READ_CALLED_NUM_FROM_RURI"
+
+
+}
+
+cleanUpLogsFolder()
+{
+	rm -rf  $PDIR/$serviceName/$SWAP/* 
+	rm -rf  $PDIR/$serviceName/$HEAP/* 
+	#rm -rf  $PDIR/$serviceName/$SCAN/* 
+	rm -rf $PDIR/$serviceName/$RESULT/result*.*
+	rm -rf $PDIR/$serviceName/$RESULT/*.log
+	> $PDIR/$serviceName/$LOG/$LOG_FILE
+
+
+}
+
+checkSIPP()
+{
+	wait 2
+	file=tmp_sipp_proc
+	> $file
+	ps -aef | grep $1  > $file
+	ps -aef | grep CRE_DATA  >> $file
+
+	logger "checkSIPP - $1"
+	cat $file | while read LINE ; do
+		a=`echo $LINE | cut -d " " -f2`
+		if [ "$a" != "" ]
+		then
+			logger $a
+			logger "process is $a"
+			logger "killing remaining SIPP exe."
+			wait 5
+
+			if [ "$a" != "" ]
+			then
+				kill -9 $a
+			fi
+		fi
+	done
+	rm -f tmp_sipp_proc
+}
+
+convertsecs() {
+ ((h=${1}/3600))
+ ((m=(${1}%3600)/60))
+ ((s=${1}%60))
+ printf "%02d:%02d:%02d" $h $m $s
+}

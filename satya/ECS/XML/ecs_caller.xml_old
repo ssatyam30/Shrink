@@ -1,0 +1,540 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+
+<!-- This program is free software; you can redistribute it and/or      -->
+<!-- modify it under the terms of the GNU General Public License as     -->
+<!-- published by the Free Software Foundation; either version 2 of the -->
+<!-- License, or (at your option) any later version.                    -->
+<!--                                                                    -->
+<!-- This program is distributed in the hope that it will be useful,    -->
+<!-- but WITHOUT ANY WARRANTY; without even the implied warranty of     -->
+<!-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the      -->
+<!-- GNU General Public License for more details.                       -->
+<!--                                                                    -->
+<!-- You should have received a copy of the GNU General Public License  -->
+<!-- along with this program; if not, write to the                      -->
+<!-- Free Software Foundation, Inc.,                                    -->
+<!-- 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA             -->
+<!--                                                                    -->
+<!--                 Sipp default 'uas' scenario.                       -->
+<!--                                                                    -->
+
+<scenario name="Basic UAC   ">
+
+<!-- #testCaseID;dialNO;from;from_PAI;OTG;PAI_Header;PRIVATE_Header;PRIORITY_Header;FlowSequence;CallBack 0 or 1;PSAP1_Error;PSAP2_Error;
+          colt-1;100;anonymous;9711522290;otg=STSTLAB02_TOK0345600002;1;PRIVATE: id;PRIORITY: HIGH;I-100-I200-ACK-I-100-I200-ACK-RBYE-SB200-;1;480-486-;503-;
+-->
+<nop>
+	<action>
+	 <assignstr assign_to="vTestCaseID" value="[field0]" />
+	 <assignstr assign_to="vCallee" value="[field1]" />
+	 <assignstr assign_to="vCallerF" value="[field2]" />
+	 <assignstr assign_to="vCallerP" value="[field3]" />
+	 <assignstr assign_to="vOTG" value=";[field4]" />
+	 <assignstr assign_to="vPRIV" value="[field5]" />
+	<strcmp assign_to="result" variable="vPRIV" value="0" />
+	<test assign_to="vP" variable="result" compare="equal" value="0" />
+	 <assignstr assign_to="vPRIV" value="[field6]" />
+	 <assignstr assign_to="vPRIO" value="[field7]" />
+	 <assignstr assign_to="vFLOW" value="[field8]" />
+	 <assignstr assign_to="vPSAP1_ERR" value="[field9]" />
+ <exec command="echo TESTCASEID:[$vTestCaseID],CALLID:[call_id]  >> ECS/SIPP_XML_Result.txt" />
+ <exec command="echo OUTGOING:A,ACTION:START,TESTCASEID:[$vTestCaseID],CALLID:[call_id] >> ECS/SIPP_XML_Status.txt" />
+	 <assignstr assign_to="vPSAP2_ERR" value="[field10]" />
+   </action>
+</nop>	
+<nop next="donotsendPAI" test="vP"><action><log message="checking to send PAI = [$vP] "/></action></nop>
+<nop><action><assignstr assign_to="vPAI" value="P-Asserted-Identity: <tel:[$vCallerP]>" /></action></nop>
+
+<label id="donotsendPAI"/>
+
+<nop><action><log message="sending First INVITE "/></action></nop>
+
+ <send retrans="1500">
+    <![CDATA[
+
+
+		INVITE sip:[$vCallee]@[remote_ip] SIP/2.0 
+		Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+		Max-Forwards: 70 
+		Contact: <sip:[$vCallerF]@[local_ip]:[local_port];transport=udp> 
+		To: "[$vCallee]"<sip:[$vCallee]@[remote_ip]> 
+		From: "[$vCallerF]"<sip:[$vCallerF]@[remote_ip][$vOTG]>;tag=TC-[$vTestCaseID]Satya59063c30 
+		Call-ID: [$vTestCaseID]///[call_id] 
+		CSeq: [cseq] INVITE 
+		Allow: INVITE,ACK,CANCEL,BYE,NOTIFY,REFER,OPTIONS,INFO,SUBSCRIBE,UPDATE,PRACK 
+		Content-Type: application/sdp 
+		Session-Expires: 3600;refresher=uac
+		User-Agent: X-Lite release Satya_PSAP1_[$vPSAP1_ERR]_PSAP2_[$vPSAP2_ERR]
+		Supported: timer,100rel
+		Min-SE: 90
+		Content-Disposition: session; handling=required
+		[$vPAI]
+		[$vPRIV]
+		[$vPRIO]
+		Content-Length: [len]
+
+		v=0 
+		o=- 8 2 IN IP4 [local_ip] 
+		s=<CounterPath eyeBeam 1.5> 
+		c=IN IP4 [local_ip] 
+		t=0 0 
+		m=audio [local_port+3] RTP/AVP 107 119 0 98 8 3 101 
+		a=alt:1 1 : Whzi1DMY RQG2++Kv [local_ip] [local_port+3]
+		a=fmtp:101 0-15 
+		a=rtpmap:107 BV32/16000 
+		a=rtpmap:119 BV32-FEC/16000 
+		a=rtpmap:98 iLBC/8000 
+		a=rtpmap:101 telephone-event/8000 
+		a=sendrecv 
+		a=x-rtp-session-id:AB61AAA86CB54E23AFC437C27089C3E5 
+
+	]]>
+  </send>
+
+<recv response="100" optional="true" />
+<recv response="181" optional="true" />
+<recv response="182" optional="true" />
+<recv response="183" optional="true" />
+<recv response="180" >
+	 <action>
+		<ereg regexp=".*" search_in="hdr" header="RSeq:" check_it="true" assign_to="vRseq" />
+		<ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+	</action>
+</recv>
+<send >
+    <![CDATA[
+
+		PRACK sip:[$vCallee]@[remote_ip]:[remote_port] SIP/2.0
+		Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
+		Max-Forwards: 70
+		[last_From:]
+		[last_To:]
+		[last_Call-ID:]
+		CSeq: [cseq] PRACK
+		RAck:[$vRseq][$vCseq]
+		Content-Length: 0
+
+]]>
+  </send>
+<recv response="200" />
+
+<recv response="200" >
+<action>
+	<ereg regexp="(.*)(<)(.*)(>)" search_in="hdr" header="Contact:" check_it="true" assign_to="dummy,dummy,dummy,vContact,dummy" />
+	<log message="received 200 OK"/>
+</action>
+</recv>
+  <send >
+    <![CDATA[
+
+		ACK [$vContact] SIP/2.0
+		Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+		To: <sip:[$vCallee]@[remote_ip]>[peer_tag_param]
+		From: <sip:[$vCallerF]@[remote_ip]>;tag=TC-[$vTestCaseID]Satya59063c30
+		Call-ID: [$vTestCaseID]///[call_id] 
+		CSeq: [cseq] ACK
+		Contact: <sip:[$vCallerF]@[local_ip]:[local_port];transport=udp> 
+		Content-Length: 0
+
+    ]]>
+  </send>
+
+<nop>
+	<action>
+	 <assignstr assign_to="vF" value="[$vFLOW]" />
+		<strcmp assign_to="result" variable="vF" value="" />
+		<test assign_to="vFL" variable="result" compare="equal" value="0" />
+		<ereg regexp="([A-Z0-9]{1,9})-(.*)"  search_in="var" check_it="true" assign_to="dummy,vMsg,vFlowSeq" variable="vF" />
+	</action>
+</nop>	
+
+<nop test="vFL" next="NoCallBack" >
+ <action>
+	 <log message="Flow message now - [$vF] and [$vFL] and Flow:[$vMsg] and remainingFlow:[$vFlowSeq]"/>
+ </action>
+</nop>
+
+
+
+<label id="flow"/>
+<nop>
+	<action>
+		<strcmp assign_to="result" variable="vMsg" value="SI" />
+		<test assign_to="vSendINVITE" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="RI" />
+		<test assign_to="vReceiveINVITE" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="S100" />
+		<test assign_to="vSend100" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="R100" />
+		<test assign_to="vReceive100" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="R181" />
+		<test assign_to="vReceive181" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="R183" />
+		<test assign_to="vReceive183" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="R180" />
+		<test assign_to="vReceive180" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="S180" />
+		<test assign_to="vSend180" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="RI200" />
+		<test assign_to="vReceiveI200" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="SI200" />
+		<test assign_to="vSendI200" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="SP200" />
+		<test assign_to="vSendP200" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="SB200" />
+		<test assign_to="vSendB200" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="RB200" />
+		<test assign_to="vReceiveB200" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="SACK" />
+		<test assign_to="vSendACK" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="RACK" />
+		<test assign_to="vReceiveACK" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="RBYE" />
+		<test assign_to="vReceiveBYE" variable="result" compare="equal" value="0" />
+		<strcmp assign_to="result" variable="vMsg" value="SBYE" />
+		<test assign_to="vSendBYE" variable="result" compare="equal" value="0" />
+
+		<strcmp assign_to="result" variable="vMsg" value="RPRACK" />
+		<test assign_to="vReceivePRACK" variable="result" compare="equal" value="0" />
+	</action>
+</nop>	
+<nop next="sendINVITE" test="vSendINVITE"> <action> <log message="checking if send INVITE is the next transaction "/> </action> </nop>
+<nop next="receiveINVITE" test="vReceiveINVITE"> <action> <log message="checking if receive INVITE is the next transaction "/> </action> </nop>
+<nop next="send100" test="vSend100"> <action> <log message="checking if send 100 is the next transaction"/> </action> </nop>
+<nop next="receive100" test="vReceive100"> <action> <log message="checking if receive 100 is the next transaction"/> </action> </nop>
+<nop next="receive181" test="vReceive181"> <action> <log message="checking if receive 181 is the next transaction"/> </action> </nop>
+<nop next="receive183" test="vReceive183"> <action> <log message="checking if receive 183 is the next transaction "/> </action> </nop>
+<nop next="send180" test="vSend180"> <action> <log message="checking if send 180 is the next transaction"/> </action> </nop>
+<nop next="receive180" test="vReceive180"> <action> <log message="checking if receive 180 is the next transaction"/> </action> </nop>
+<nop next="sendInvite200" test="vSendI200"> <action> <log message="checking if send 200 of INVITE is the next transaction "/> </action> </nop>
+<nop next="receiveInvite200" test="vReceiveI200"> <action> <log message="checking if receive 200 of Invite is the next transaction "/> </action> </nop>
+<nop next="sendPRACK200" test="vSendP200"> <action> <log message="checking if send PRACK 200 is the next transaction "/> </action> </nop>
+<nop next="sendBYE200" test="vSendB200"> <action> <log message="checking if send BYE 200 is the next transaction "/> </action> </nop>
+<nop next="receiveBYE200" test="vReceiveB200"> <action> <log message="checking if receive BYE 200 is the next transaction "/> </action> </nop>
+<nop next="sendACK" test="vSendACK"> <action> <log message="checking if send ACK is the next transaction "/> </action> </nop>
+<nop next="receiveACK" test="vReceiveACK"> <action> <log message="checking if receive ACK is the next transaction "/> </action> </nop>
+<nop next="sendBYE" test="vSendBYE"> <action> <log message="checking if send BYE is the next transaction "/> </action> </nop>
+<nop next="receiveBYE" test="vReceiveBYE"> <action> <log message="checking if receive BYE is the next transaction "/> </action> </nop>
+<nop next="receivePRACK" test="vReceivePRACK"> <action> <log message="checking if receive PRACK is the next transaction "/> </action> </nop>
+
+<label id="sendINVITE"/>
+<nop><action>
+	<log message="sending INVITE "/>
+</action></nop>
+
+ <send retrans="1500" next="4">
+    <![CDATA[
+
+
+		INVITE sip:[$vCallee]@[remote_ip] SIP/2.0 
+		Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+		Max-Forwards: 70 
+		Contact: <sip:[$vCallerF]@[local_ip]:[local_port];transport=udp> 
+		To: "[$vCallee]"<sip:[$vCallee]@[remote_ip]> 
+		From: "[$vCallerF]"<sip:[$vCallerF]@[remote_ip][$vOTG]>;tag=TC-[$vTestCaseID]Satya59063c30 
+		Call-ID: [$vTestCaseID]///[call_id] 
+		CSeq: [cseq] INVITE 
+		Allow: INVITE,ACK,CANCEL,BYE,NOTIFY,REFER,OPTIONS,INFO,SUBSCRIBE,UPDATE,PRACK 
+		Content-Type: application/sdp 
+		Session-Expires: 3600;refresher=uac
+		User-Agent: X-Lite release 1002tx stamp 29712 
+		Supported: timer,100rel
+		Min-SE: 90
+		Content-Disposition: session; handling=required
+		[$vPAI]
+		[$vPRIV]
+		[$vPRIO]
+		Content-Length: [len]
+
+		v=0 
+		o=- 8 2 IN IP4 [local_ip] 
+		s=<CounterPath eyeBeam 1.5> 
+		c=IN IP4 [local_ip] 
+		t=0 0 
+		m=audio [local_port+3] RTP/AVP 107 119 0 98 8 3 101 
+		a=alt:1 1 : Whzi1DMY RQG2++Kv [local_ip] [local_port+3]
+		a=fmtp:101 0-15 
+		a=rtpmap:107 BV32/16000 
+		a=rtpmap:119 BV32-FEC/16000 
+		a=rtpmap:98 iLBC/8000 
+		a=rtpmap:101 telephone-event/8000 
+		a=sendrecv 
+		a=x-rtp-session-id:AB61AAA86CB54E23AFC437C27089C3E5 
+
+	]]>
+  </send>
+
+
+
+<label id="receiveINVITE"/>
+<nop><action><log message="waiting for INVITE "/></action></nop>
+<recv request="INVITE" next="4" >
+   <action>
+     <ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+     <ereg regexp=".*" search_in="hdr" header="Via:" check_it="true" assign_to="vVia" />
+	<log message="received  INVITE "/>
+   </action>
+</recv>
+
+<label id="send100"/>
+<nop><action><log message="sending 100 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 100 Trying
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="receive100"/>
+<nop><action><log message="sending 100 "/></action></nop>
+<recv response="100" next="4"/>
+
+<label id="receive181"/>
+<nop><action><log message="waiting for 181 "/></action></nop>
+<recv response="181" next="4">
+	 <action>
+		<ereg regexp=".*" search_in="hdr" header="RSeq:" check_it="true" assign_to="vRseq" />
+		<ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+	</action>
+</recv>
+<label id="receive183"/>
+<nop><action><log message="waiting for 183 "/></action></nop>
+<recv response="183" next="4">
+	 <action>
+		<ereg regexp=".*" search_in="hdr" header="RSeq:" check_it="true" assign_to="vRseq" />
+		<ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+	</action>
+</recv>
+
+<label id="receive180"/>
+<nop><action><log message="waiting for 180 "/></action></nop>
+<recv response="180" next="4">
+	 <action>
+		<ereg regexp=".*" search_in="hdr" header="RSeq:" check_it="true" assign_to="vRseq" />
+		<ereg regexp=".*" search_in="hdr" header="CSeq:" check_it="true" assign_to="vCseq" />
+	</action>
+</recv>
+
+
+<label id="send180"/>
+<nop><action><log message="sending 180 "/></action></nop>
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 180 Ringing
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Require: 100rel
+RSeq: 100
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="receiveACK"/>
+<nop><action><log message="waiting for ACK "/></action></nop>
+<recv request="ACK" next="4" />  
+<label id="sendInvite200"/>
+<nop><action><log message="sending 200 for INVITE"/></action></nop>
+  <send next="4">
+    <![CDATA[
+
+		SIP/2.0 200 OK 
+      Via:[$vVia] 
+		[last_From:]
+		[last_To:]
+		[last_Call-ID:]
+      CSeq: [$vCseq]
+		Contact: <[$vCallerF]@[local_ip]:[local_port];transport=udp>
+		Allow: INVITE,ACK,BYE,CANCEL,NOTIFY,REFER,OPTIONS,SUBSCRIBE,PRACK,UPDATE
+		Content-Type: application/sdp 
+		User-Agent: X-Lite release 1002tx stamp 29712 
+		Content-Length: [len]  
+
+		v=0 
+		o=- 1 2 IN IP4 [local_ip] 
+		s=<CounterPath eyeBeam 1.5> 
+		c=IN IP4 [local_ip] 
+		t=0 0 
+		m=audio 5092 RTP/AVP 8 0 3 104 96 
+		a=fmtp:96 0-15 
+		a=rtpmap:104 iLBC/8000 
+		a=rtpmap:96 telephone-event/8000 
+		a=sendrecv 
+		a=x-rtp-session-id:72B5C8CE9AE046B2977EDC5D7545CE54 
+
+    ]]>
+  </send>
+
+<label id="receiveBYE"/>
+<nop><action><log message="waiting for BYE "/></action></nop>
+<recv request="BYE" next="4" />
+
+<label id="sendBYE"/>
+<nop><action><log message="sending BYE "/></action></nop>
+  <send next="4">
+    <![CDATA[
+
+		BYE [$vContact] SIP/2.0
+		Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+		To: <sip:[$vCallee]@[remote_ip]>[peer_tag_param]
+		From: <sip:[$vCallerF]@[remote_ip]>;tag=TC-[$vTestCaseID]Satya59063c30
+		Call-ID: [$vTestCaseID]///[call_id] 
+		CSeq: [cseq] BYE
+		Contact: <sip:[$vCallerF]@[local_ip]:[local_port];transport=udp> 
+		Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="sendBYE200"/>
+<nop><action><log message="sending 200 OK for BYE "/></action></nop>
+
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 200 OK
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="receiveBYE200"/>
+<nop><action><log message="waiting for 200 OK for BYE "/></action></nop>
+<recv response="200" next="4"/>
+
+<label id="receiveInvite200"/>
+<nop><action><log message="waiting for 200 OK for INVITE "/></action></nop>
+<recv response="200" next="4">
+<action>
+	<ereg regexp="(.*)(<)(.*)(>)" search_in="hdr" header="Contact:" check_it="true" assign_to="dummy,dummy,dummy,vContact,dummy" />
+	<log message="received 200 OK"/>
+</action>
+</recv>
+
+<label id="sendACK"/>
+<nop><action><log message="sending  ACK "/></action></nop>
+  <send next="4">
+    <![CDATA[
+
+		ACK [$vContact] SIP/2.0
+		Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+		To: <sip:[$vCallee]@[remote_ip]>[peer_tag_param]
+		From: <sip:[$vCallerF]@[remote_ip]>;tag=TC-[$vTestCaseID]Satya59063c30
+		Call-ID: [$vTestCaseID]///[call_id] 
+		CSeq: [cseq] ACK
+		Contact: <sip:[$vCallerF]@[local_ip]:[local_port];transport=udp> 
+		Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="receivePRACK"/>
+<nop><action><log message="waiting for PRACK"/></action></nop>
+<recv request="PRACK" next="4" />  
+<label id="sendPRACK200"/>
+<nop><action><log message="sending 200 OK for PRACK "/></action></nop>
+
+  <send next="4" >
+    <![CDATA[
+
+SIP/2.0 200 OK
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+<label id="4"/>
+<nop>
+	<action>
+<log message="*******checking for remaining transaction****** "/>
+		<strcmp assign_to="result" variable="vFlowSeq" value="" />
+		<test assign_to="vF" variable="result" compare="not_equal" value="0" />
+		<test assign_to="vE" variable="result" compare="equal" value="0" />
+		<ereg regexp="([A-Z0-9]{1,9})-(.*)"  search_in="var" check_it="true" assign_to="dummy,vMsg,vFlowSeq" variable="vFlowSeq" />
+	</action>
+</nop>	
+<nop next="flow" test="vF"><action><log message="now checking remaining flow vF - message [$vMsg]  and remaining:[$vFlowSeq]"/></action></nop>
+<nop next="NoCallBack" test="vE"> <action><log message="Going to end call"/></action></nop>
+
+
+
+<label id="NoCallBack"/>
+<nop><action><log message="waiting for BYE as this for no_call_back "/></action></nop>
+
+<recv request="BYE" >  </recv>
+<send next="endCall">
+    <![CDATA[
+
+SIP/2.0 200 OK
+[last_Via:]
+[last_From:]
+[last_To:]
+[last_Call-ID:]
+[last_CSeq:]
+Content-Length: 0
+
+    ]]>
+  </send>
+
+
+<label id="5"/>
+  <send >
+    <![CDATA[
+
+		ACK sip:[$vCallee]@[remote_ip] SIP/2.0
+		[last_Via:]
+		[last_From:]
+		[last_To:][peer_tag_param]
+		[last_Call-ID:]
+		CSeq: [cseq] ACK
+		Content-Length: 0
+
+    ]]>
+  </send>
+<label id="endCall"/>
+
+
+<pause milliseconds="3000"/>
+<nop> <action> <exec command="echo OUTGOING:A,ACTION:FINISHED,TESTCASEID:[$vTestCaseID],CALLID:[call_id]>> ECS/SIPP_XML_Status.txt" /> </action> </nop>	
+
+  <ResponseTimeRepartition value="10, 20, 30, 40, 50, 100, 150, 200"/>
+
+  <!-- definition of the call length repartition table (unit is ms)     -->
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+
+</scenario>
+
+
+
+
+
+

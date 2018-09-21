@@ -1,0 +1,457 @@
+#!/bin/ksh -x
+
+#############################################
+export session_idFile="$PDIR/INC/session_id.ingw"
+export dialogIDFile="$PDIR/INC/dialogIDFile"
+
+
+export inc_sess_id=`head -1 $session_idFile`
+export hex_file=""
+
+num_hex(){
+	hex=""
+	num=$1
+	code=""
+
+#SNS fields
+#DIALLED_NO_SNS(0x08 0x68 0x34 0x30 0x66) no tag, no size change
+#TRUN_GRP_ID_SNS(85 02 01 90)  - 85
+#CALLED_PARTY_ID_SNS(8f 07 01 10 -08 68 34 30 66-) 8f  
+#CHARGE_NO(93 04 83 10 08 08)  93 
+#CALLER(92 07 03 13 08 38 92 27 16) 92  
+
+#MLCN fields CHARGE_NO (93 07 03 10 08 88 78 00 10) 
+#	num_hex `echo $1 | cut -d ";" -f2` 0 1 "SCCP_CALLED_PARTY"  --- length and value
+#	num_hex `echo $1 | cut -d ";" -f3` 1 0 "DN" - DN(81 05 08 88 78 00 10)
+#	num_hex `echo $1 | cut -d ";" -f4` 0 1 "TRIGGER_CRITERA" - TRIGGER_CRITERIA (9f 34 01 03)
+#	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CALLING_PARTY_NO" 92 07 03 13 08 88 78 00 10
+#	num_hex `echo $1 | cut -d ";" -f6` 0 1 "DIALLED_NO" - 96 05 80 50 36 66 03
+
+##### GETS Fields
+#CALLER_HT; - 92
+#PIC_CARRIER; -  only values
+#CALLED_PARTY_ID_GETS - 8f 07 03 10 17 60 72 34 78
+#;CHARGE_NO_HT; - same as mlcn
+#LATA - 0 padding at the end.
+
+	case $4 in
+		SERVICE_KEY)
+			logger "SERVICE_KEY code: "
+#			code= tag length (80 size (01)) 
+			code="80 01 "
+			;;
+		DIALLED_NO_MLCN)
+                        logger "DIALLED_NO_MLCN code:"
+                        if [ $((${#num}%2)) -eq 1 ];
+                        then
+                                num="${num}0"
+                        fi
+                        ;;
+
+                TRUNK_GRP_ID_SNS)
+                        logger "TRUN_GRP_ID_SNS code:"
+                        if [ $((${#num}%2)) -eq 1 ];
+                        then
+                                num="0${num}"
+                        fi
+                        orig_length=`expr $((${#num}/2))`
+                        o_length=`printf "%x" $orig_length`
+
+                        if [ $((${#o_length}%2)) -eq 1 ];
+                        then
+                                o_length="0$o_length"
+                        fi
+                        code="85 $o_length "
+                        ;;
+                CALLED_PARTY_ID_SNS)
+                        logger "CALLED_PARTY_ID_SNS code:"
+#                       code= code length nature_of_add_odd_even numbering_plan - 83 07 03 13 
+                        odd_even="01 10"
+                        if [ $((${#num}%2)) -eq 1 ];
+                        then
+                                num="${num}0"
+                                odd_even="81 10"
+                        fi
+                        orig_length=`expr $((${#num}/2)) + 2`
+                        o_length=`printf "%x" $orig_length`
+
+                        if [ $((${#o_length}%2)) -eq 1 ];
+                        then
+                                o_length="0$o_length"
+                        fi
+                        code="8f $o_length $odd_even "
+                        ;;
+		CALLER_LNP)
+			logger "CALLER code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 83 07 03 13 
+			odd_even="03 13"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 13"
+			fi
+			orig_length=`expr $((${#num}/2)) + 2`
+			o_length=`printf "%x" $orig_length` 
+
+			if [ $((${#o_length}%2)) -eq 1 ];
+			then
+				o_length="0$o_length"
+			fi
+			code="83 $o_length $odd_even "
+			;;
+		CALLEE_LNP)
+			logger "CALLEE code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 0x82 0x0b (size of dest-11) 0x83 (odd size) or 0x82 0x07 (size of dst- 7) 0x03 (even size)
+
+			odd_even="03 10"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 10"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="82 $d_length $odd_even "
+			;;
+		CALLED_PARTY_ID_GETS)
+			logger "CALLED_PARTY_ID_GETS code:"
+			odd_even="03 10"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 10"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="8f $d_length $odd_even "
+			;;
+		CALLER_HT)
+			logger "CALLER code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 83 07 03 13 
+			odd_even="03 13"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 13"
+			fi
+			orig_length=`expr $((${#num}/2)) + 2`
+			o_length=`printf "%x" $orig_length` 
+
+			if [ $((${#o_length}%2)) -eq 1 ];
+			then
+				o_length="0$o_length"
+			fi
+			code="92 $o_length $odd_even "
+			;;
+		CALLEE_HT)
+			logger "CALLEE code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 0x82 0x0b (size of dest-11) 0x83 (odd size) or 0x82 0x07 (size of dst- 7) 0x03 (even size)
+
+			odd_even="00 50"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="80 50"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="96 $d_length $odd_even "
+			;;
+		CHARGE_NO_HT)
+			logger "CHARGE NUMBER code:"
+#			code= code length nature_of_add_odd_even numbering_plan - 0x82 0x0b (size of dest-11) 0x83 (odd size) or 0x82 0x07 (size of dst- 7) 0x03 (even size)
+
+			odd_even="03 10"
+			if [ $((${#num}%2)) -eq 1 ];
+			then
+				num="${num}0"
+				odd_even="83 10"
+			fi
+			dest_length=`expr $((${#num}/2)) + 2`
+			d_length=`printf "%x" $dest_length` 
+			
+			if [ $((${#d_length}%2)) -eq 1 ];
+			then
+				d_length="0$d_length"
+			fi
+			
+			code="93 $d_length $odd_even "
+			;;
+		TCR)
+			logger "TCR code:"
+#			code= tag length 9f_34 01 03
+			code="9f 34 01 "
+			;;
+		CPC)
+			logger "CPC code:"
+#			code= tag length 85 01 0a
+			code="85 01 "
+			;;
+		DATA_LENGTH)
+			logger "DATA_LENGTH code:"
+#			code= total tag data_length 
+			code="`printf "%x" $total_data_length` 30 "
+			num=$data_length
+
+			;;
+		*)
+			logger "$4 code: "
+			code=""
+			;;
+	  esac
+
+	
+	if [ "x$2" == "x1" ]
+	then
+		num=`printf "%x" $num`
+	fi
+	j="1"
+	if [ $((${#num}%2)) -eq 1 ];
+	then
+		num="0$num"
+	fi
+
+	for (( i=0; i<${#num}; i++ )) 
+	do   
+		a="${num:$i:1}"
+		i=`expr $i + $j`
+		b="${num:$i:1}"
+		if [ "x$b" == "x" ]
+		then
+			b=0
+		fi
+		if [ "x$3" == "x1" ]
+		then
+			hex="$hex$b$a "
+		else hex="$hex$a$b "
+		fi
+	done
+	i=`expr ${#hex} - 1`
+	hex="${hex:0:$i}"
+#	return $hex
+	logger "$num and $hex for $4"
+	sed s/$4/"$code$hex"/g $PDIR/$serviceName/$SWAP/$dialog_ID.hex > tmp
+	cat tmp > $PDIR/$serviceName/$SWAP/$dialog_ID.hex 
+}
+
+createBufferToSendLNP(){
+	
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "CALLER_LNP"
+	num_hex `echo $1 | cut -d ";" -f3` 0 1 "CALLEE_LNP"
+	num_hex `echo $1 | cut -d ";" -f4` 0 1 "CPC"
+	num_hex $sk 1 0 "SERVICE_KEY"
+	num_hex $opc 1 0 "ORIG_POINT_CODE"
+	num_hex $tpc 1 0 "TERM_POINT_CODE"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+}
+
+#DIALLED_NO_SNS(0x08 0x68 0x34 0x30 0x66) no tag, no size change
+#TRUNK_GRP_ID_SNS(85 02 01 90)  - 85
+#CALLED_PARTY_ID_SNS(8f 07 01 10 -08 68 34 30 66-) 8f  
+#CHARGE_NO(93 04 83 10 08 08)  93 
+#CALLER(92 07 03 13 08 38 92 27 16) 92  
+
+createBufferToSendSNS(){
+	
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "CALLER_HT"
+	num_hex `echo $1 | cut -d ";" -f3` 1 0 "TRUNK_GRP_ID_SNS"
+	num_hex `echo $1 | cut -d ";" -f4` 0 1 "CALLED_PARTY_ID_SNS"
+	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CHARGE_NO_HT"
+	num_hex `echo $1 | cut -d ";" -f6` 0 1 "DIALLED_NO_SNS"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+
+}
+
+createBufferToSendMLCN(){
+	
+	#test_case_id;SCCP_CALLED_PARTY;DN;TRIGGER_CRITERA;CALLING_PARTY_NO;DIALLED_NO_MLCN;
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "SCCP_CALLED_PARTY"
+	num_hex `echo $1 | cut -d ";" -f3` 0 1 "DN"
+	num_hex `echo $1 | cut -d ";" -f4` 0 0 "TCR"
+	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CHARGE_NO_HT"
+	num_hex `echo $1 | cut -d ";" -f6` 0 1 "CALLER_HT"
+	num_hex `echo $1 | cut -d ";" -f7` 0 1 "DIALLED_NO_MLCN"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+
+}
+
+#CALLER_HT; - 92
+#PIC_CARRIER; -  only values
+#CALLED_PARTY_ID_GETS - 8f 07 03 10 17 60 72 34 78
+#;CHARGE_NO_HT; - same as mlcn
+#LATA - 0 padding at the end.
+
+
+createBufferToSendGETS(){
+	
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "CALLER_HT"
+	num_hex `echo $1 | cut -d ";" -f3` 0 1 "PIC_CARRIER"
+	num_hex `echo $1 | cut -d ";" -f4` 0 1 "CALLED_PARTY_ID_GETS"
+	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CHARGE_NO_HT"
+	num_hex `echo $1 | cut -d ";" -f6` 0 1 "LATA"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+
+}
+
+createBufferToSendHATS2(){
+	
+	num_hex `echo $1 | cut -d ";" -f2` 0 1 "CALLER_HT"
+	num_hex `echo $1 | cut -d ";" -f3` 0 1 "CALLEE_HT"
+	num_hex `echo $1 | cut -d ";" -f4` 0 0 "TCR"
+	num_hex `echo $1 | cut -d ";" -f5` 0 1 "CHARGE_NO_HATS2"
+	num_hex $dialog_ID 1 0 "DIALOG_ID"
+
+}
+
+createHex(){
+
+	LINE=$1
+	testcase_id=`echo $LINE| cut -d ";" -f1`
+	> $PDIR/$serviceName/$SWAP/$dialog_ID.buffer
+	cat $hex_file > $PDIR/$serviceName/$SWAP/$dialog_ID.hex
+
+	featureType=`echo $INC_TC_File | cut -d "_" -f2 | cut -d "." -f1`
+	if [ "$featureType" == "hats2" ] 
+	then
+		createBufferToSendHATS2 $LINE
+	elif [ "$featureType" == "sns" ] 
+	then
+		createBufferToSendSNS $LINE
+	elif [ "$featureType" == "mlcn" ] 
+	then
+		createBufferToSendMLCN $LINE
+	elif [ "$featureType" == "gets" ] 
+	then
+		createBufferToSendGETS $LINE
+	else
+		createBufferToSendLNP $LINE
+	fi
+
+	#	DATA_LENGTH
+	logger "DATA_LENGTH code: total_data_length=$data_length + $orig_length + $dest_length + 1"
+	data_length=`expr $data_length + $orig_length + $dest_length`
+	total_data_length=`expr $data_length + "2"`
+	num_hex $total_data_length 1 0 "DATA_LENGTH"
+        buffer_len=`expr 14 + $total_data_length`
+        num_hex $buffer_len 1 0 "BUFFER_SIZE"
+
+###	create buffer and get the size of hex buffer
+	$PDIR/INC/hex_to_buff.sh $PDIR/$serviceName/$SWAP/$dialog_ID.hex $PDIR/$serviceName/$SWAP/$dialog_ID.buffer
+	tl=`hexdump -v -e '1/1 "\n"' $PDIR/$serviceName/$SWAP/$dialog_ID.buffer |wc -l`	
+
+
+### create CSV file for LNP scenarios
+	echo "$testcase_id;$dialog_ID;$tl;$cas_fip\$$inc_sess_id;$1;" >> $tc_csv
+#	mv $dialog_ID.hex logs/
+
+
+}
+
+getDialogID(){
+
+	if [ ! -e "$dialogIDFile" ]
+         then
+ 	 	logger "this is first message, creating dialogIDFile"
+		dialog_ID=$FIRST_DIAG_ID
+	else 
+		logger "this is not first message of INC"
+		dialog_ID=`tail -1 $dialogIDFile`
+		if [ "dialog_ID" -gt "1200000" ] 
+		then
+			dialog_ID="1100001"
+		fi
+		dialog_ID=$((dialog_ID+1))
+				
+
+	fi
+	 echo $dialog_ID > $dialogIDFile
+
+
+}
+getDefaultBufferLength(){
+
+			data_length="$DEFAULT_BUFFER_SIZE"
+#	case $serviceName in
+#		LNP)
+#			logger "default buffer size for $serviceName = $DEFAULT_BUFFER_SIZE_LNP "
+#			data_length="$DEFAULT_BUFFER_SIZE_LNP"
+#			;;
+#		ATF)
+#			logger "default buffer size for $serviceName = $DEFAULT_BUFFER_SIZE_ATF "
+#			data_length="$DEFAULT_BUFFER_SIZE_ATF"
+#			;;
+#		*)
+#			logger "default buffer size for $serviceName = 29"
+#			data_length="29"
+#			;;
+#	  esac
+
+}
+
+#export FIRST_DIAG_ID=1100001
+#### define LNP properties here ###
+#export SERVICE_KEY=70
+#export OPC=624
+#export DPC=720
+#export HEX_FILE="lnp.hex"
+#export DEFAULT_BUFFER_SIZE_LNP="29"
+
+
+### below data length is for Service ###
+export data_length=""
+export orig_length=""
+export dest_length=""
+export dialog_ID=""
+export sk=""
+export opc=""
+export dpc=""
+export cas_fip=""
+export testcase_id=""
+
+createBufferFiles(){
+
+
+	getDialogID
+	#dialog_ID=`grep first_diag_id $propertyFile | cut -d "=" -f2`
+	
+	export tc_csv=$incDataFile
+
+	hex_file="$PDIR/INC/$HEX_FILE"
+	sk=$SERVICE_KEY
+	opc=$OPC
+	tpc=$DPC
+	cas_fip=`echo $CAS_ip | cut -d "=" -f2 | cut -d "." -f4`
+	echo "SEQUENTIAL;" > $tc_csv
+
+
+	egrep -v "^#|^[ ]*$" $INC_TC_File | while read -r line
+	do
+	#	echo $line
+
+		getDefaultBufferLength
+		createHex $line
+		export orig_length=""
+		export dest_length=""
+		dialog_ID=`expr 1 + $dialog_ID`
+	#break
+	done
+
+}

@@ -1,0 +1,36 @@
+#!/bin/ksh
+
+export COMMA=","
+export SEMICOLON=";"
+export COLON=":"
+
+
+#	set -A specialChars TILD EXCALAMATION AT HASH DOLLOR PERCENTAGE POWER AMPERSEND STAR SMALLBRACKETOPEN SMALLBRACKETCLOSE MINUS UNDERSCORE EQUAL PLUS BACKSLASH BIGBRACKETCLOSE BIGBRACKETOPEN CURLYBRACKEDOPEN CURLYBRACKEDCLOSE PIPE APOSTROPHE SEMICOLON COLON SLASH DOT COMMA LESSTHAN GREATERTHAN QUESTION  
+
+#	set -A specialCharsValues "`" "~" "!" "@" "#" "$" "%" "^" "&" "*" "(" ")" "-" "_" "=" "+" "\" "]" "[" "{" "}" "|" "\'" ";" ":" "/" "." "," "<" ">" "?"
+# Not Supported Chars: 	` ~ \ | & * ' " ; < > ?
+
+
+replaseSpecialChars() {
+
+
+	set -A specialChars EXCALAMATIONCHAR ATCHAR HASHCHAR DOLLORCHAR PERCENTAGECHAR POWERCHAR MINUSCHAR UNDERSCORECHAR EQUALCHAR PLUSCHAR BIGBRACKETOPENCHAR BIGBRACKETCLOSECHAR CURLYBRACKEDOPENCHAR COLONCHAR DOTCHAR COMMACHAR SLASHCHAR SPACECHAR
+	set -A specialCharsValues "!" "@" "#" "$" "%" "^" "-" "_" "=" "+" "[" "]" "{" ":" "." "," "\/" " "  
+
+	cntVal="${#specialCharsValues[@]}"
+	logger "total special chars = $cntVal"
+	i=0
+	k=0
+	while [ $i -ne $cntVal ]
+	do
+		logger "trying to change value ${specialChars[i]} with ${specialCharsValues[$k]}"
+		sed "s/${specialChars[i]}/${specialCharsValues[$k]}/g" $PDIR/$serviceName/$SWAP/$API_FILE_NAME > $PDIR/$serviceName/$SWAP/tmprep_$i
+		cp $PDIR/$serviceName/$SWAP/tmprep_$i $PDIR/$serviceName/$SWAP/$API_FILE_NAME
+		i=$((i+1))
+		k=$((k+1))
+	done
+sed "s/Local_Host/$Local_Host/g" $PDIR/$serviceName/$SWAP/$API_FILE_NAME > $PDIR/$serviceName/$SWAP/tmprep_$i
+sed "s/T1_Port/$T1_Port/g" $PDIR/$serviceName/$SWAP/tmprep_$i > $PDIR/$serviceName/$SWAP/$API_FILE_NAME 
+
+}
+
